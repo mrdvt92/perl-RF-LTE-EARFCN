@@ -4,3 +4,4 @@ MANIFEST
 README.md
 lib/RF/LTE/EARFCN.pm
 t/001_load.t
+t/002_table.t
