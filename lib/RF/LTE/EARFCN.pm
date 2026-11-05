@@ -2,6 +2,8 @@ package RF::LTE::EARFCN;
 use strict;
 use warnings;
 use base qw{Package::New};
+use Scalar::Util qw{dualvar};
+use Carp qw{croak};
 
 our $VERSION = '0.01';
 
@@ -12,13 +14,13 @@ RF::LTE::EARFCN - LTE EARFCN Channel to Frequency Converter
 =head1 SYNOPSIS
 
   use RF::LTE::EARFCN;
-  my $ch = RF::LTE::EARFCN->new(channel=>5110);
-  printf "Channel: %s\nFrequency (dl): %s\nFrequency (ul): %s\n Frequency Separation: %s\n",
-         $ch->channel, $ch->fdl, $ch->ful, $ch->fs;
+  my $rf = RF::LTE::EARFCN->new(channel=>5110);
+  printf "Channel: %s\n Frequency (dl): %s\n Frequency (ul): %s\n Frequency Separation: %s\n",
+         $rf->channel, $rf->fdl, $rf->ful, $rf->fs;
 
 =head1 DESCRIPTION
 
-This LTE EARFCN Channel to Frequency Converter uses the function and table in section 5.7.3 of ETSI TS 136 101 V17.6.0 (2022-08) to convert EARFCN Channel to Frequency Downlink (fdl), Frequency Uplink (ful), and Frequency Separation (fs).
+This LTE EARFCN Channel to Frequency Converter uses the functions and tables in sections 5.7.3 and 5.7.4 of ETSI TS 136 101 V17.6.0 (2022-08) to convert EARFCN Channel to Frequency Downlink (fdl), Frequency Uplink (ful), and Frequency Separation (fs).
 
 The carrier frequency in the uplink and downlink is designated by the E-UTRA Absolute Radio Frequency Channel
 Number (EARFCN) in the range 0 - 262143. The relation between EARFCN and the carrier frequency in MHz for the
@@ -32,6 +34,11 @@ where FUL_low and NOffs_UL are given in Table 5.7.3-1 and NUL is the uplink EARF
 
   FUL = FUL_low + 0.1(NUL - NOffs_UL)
 
+The relationship between frequency uplink and frequency downlink can also be calculated using table 5.7.4.
+
+  FDL = FUL + FS
+  FUL = FDL - FS
+
 =head1 METHODS
 
 =head2 new
@@ -42,14 +49,21 @@ where FUL_low and NOffs_UL are given in Table 5.7.3-1 and NUL is the uplink EARF
 
 Sets and returns the EARFCN channel number.  The logic is written so that the channel number can be either the downlink or uplink channel number and the correct frequency calculation is used.
 
+  my $rf = RF::LTE::EARFCN->new(channel=>5110);
+  $rf->channel(5110);
+  my $channel = $rf->channel;
+
 =cut
 
 sub channel {
   my $self = shift;
   if (@_) {
-    $self->{'channel'}      = shift;
-    $self->_row(undef); #clears and resets _row and channel_type
+    $self->{'channel'} = shift;
+    undef($self->{'_row'});         #clears _row
+    undef($self->{'channel_type'}); #clears channel_type
   }
+  croak('Error: channel required')                unless defined $self->{'channel'};
+  croak('Error: channel must be zero or greater') unless $self->{'channel'} >= 0;
   return $self->{'channel'};
 }
 
@@ -57,12 +71,16 @@ sub channel {
 
 Returns either 'ul' or 'dl' based on whether the channel is an uplink or downlink channel number.
 
+  my $channel_type = $rf->channel_type; #ISA String 'dl'||'ul'
+
 =cut
 
 sub channel_type {
   my $self = shift;
   $self->{'channel_type'} = shift if @_;
   $self->_row unless $self->{'channel_type'};
+  croak('Error: channel_type not defined') unless defined $self->{'channel_type'};
+  croak('Error: channel_type invalid')     unless ($self->{'channel_type'} eq 'dl' or $self->{'channel_type'} eq 'ul');
   return $self->{'channel_type'};
 }
 
@@ -154,37 +172,39 @@ our @BAND_TABLE = map {[split]} (
 
 sub _row {
   my $self    = shift;
-  my $channel = $self->channel or die('Error: channel require');
+  my $channel = $self->channel;
   if (@_) {
     $self->{'_row'}         = undef;
     $self->{'channel_type'} = undef;
   }
   unless ($self->{'_row'}) {
     my $found;
-    my $type;
+    my $channel_type;
     foreach my $row (@BAND_TABLE) {
       if ($row->[3] <= $channel and $channel <= $row->[4]) {
-        $found = $row;
-        $type  = 'dl';
+        $found        = $row;
+        $channel_type = 'dl';
       }
       last if $found;
       if (defined($row->[7]) and defined($row->[8]) and $row->[7] <= $channel and $channel <= $row->[8]) {
         #Not sure how to support ul at this time...
-        $found = $row;
-        $type  = 'ul';
+        $found        = $row;
+        $channel_type = 'ul';
       }
       last if $found;
     }
     die(qq{Error: table entry not found for channel "$channel"}) unless $found;
     $self->{'_row'}         = $found;
-    $self->{'channel_type'} = $type;
+    $self->{'channel_type'} = $channel_type;
   }
   return $self->{'_row'};
 }
 
-=head2 band, fdl_low, noffs_dl, range_ndl_lower, range_ndl_upper, ful_low, noffs_ul, range_nul_lower, range_nul_upper
+=head2 band, fdl_low, noffs_dl, range_ndl_lower, range_ndl_upper, ful_low, noffs_ul, range_nul_lower, range_nul_upper, band_note2
 
 Returns the table values directly from the table based on the channel.
+
+  my $band = $rf->band;
 
 =cut
 
@@ -197,32 +217,34 @@ sub ful_low         {shift->_row->[5]};
 sub noffs_ul        {shift->_row->[6]};
 sub range_nul_lower {shift->_row->[7]};
 sub range_nul_upper {shift->_row->[8]};
+sub band_note2      {defined(shift->_row->[5]) ? 0 : 1};
 
 =head2 fdl
 
-Returns the downlink carrier frequency.
+Calculates and returns the downlink carrier frequency in MHz.
+
+  my $frequency_downlink_mhz = $rf->fdl;
 
 The relation between EARFCN and the carrier frequency in MHz for the downlink is given by the following equation, where FDL_low and NOffs_DL are given in Table 5.7.3-1 and NDL is the
 downlink EARFCN.
 
   FDL = FDL_low + 0.1(NDL - NOffs_DL)
 
-Issue: Does not support Narrow Band IoT options NB1 or NB2.
-
 =cut
 
 sub fdl {
-  my $self     = shift;
-  my $channel  = $self->channel      or die('Error: channel required');
-  my $type     = $self->channel_type or die('Error: channel type not defined');
-  return $type eq 'ul' ? $self->ful + $self->fs
-       : $type eq 'dl' ? $self->fdl_low + 0.1 * ($channel - $self->noffs_dl)
+  my $self         = shift;
+  my $channel_type = $self->channel_type;
+  return $channel_type eq 'ul' ? $self->ful + $self->fs
+       : $channel_type eq 'dl' ? $self->fdl_low + 0.1 * ($self->channel - $self->noffs_dl)
        : die('Error: unexpected channel type');
 }
 
 =head2 ful
 
-Returns the uplink carrier frequency.
+Calculates and returns the uplink carrier frequency in MHz.
+
+  my $frequency_uplink_mhz = $rf->ful;
 
 The relation between EARFCN and the carrier frequency in MHz for the uplink is given by the following equation where FUL_low and NOffs_UL are given in Table 5.7.3-1 and NUL is the uplink EARFCN.
 
@@ -233,11 +255,11 @@ Issue: Does not support Narrow Band IoT options NB1 or NB2.
 =cut
 
 sub ful {
-  my $self = shift;
-  my $channel  = $self->channel      or die('Error: channel require');
-  my $type     = $self->channel_type or die('Error: row type not defined');
-  return $type eq 'dl' ? $self->fdl - $self->fs
-       : $type eq 'ul' ? $self->ful_low + 0.1 * ($channel - $self->noffs_ul)
+  my $self         = shift;
+  my $channel_type = $self->channel_type;
+  return $self->band_note2      ? dualvar(0, 'n/a')
+       : $channel_type eq 'dl'  ? $self->fdl - $self->fs
+       : $channel_type eq 'ul'  ? $self->ful_low + 0.1 * ($self->channel - $self->noffs_ul)
        : die('Error: unexpected channel type');
 }
 
@@ -290,7 +312,9 @@ our %FS_TABLE = qw{
 
 =head2 fs
 
-Returns the TX-RX frequency separation from Table 5.7.4-1
+Returns the TX-RX frequency separation in MHz from Table 5.7.4-1 based on the band of the channel.
+
+  my $frequency_separation_mhz = $rf->fs;
 
 The default E-UTRA TX channel (carrier center frequency) to RX channel (carrier center frequency) separation is
 specified in Table 5.7.4-1 for the TX and RX channel bandwidths defined in Table 5.6.1-1
@@ -298,15 +322,18 @@ specified in Table 5.7.4-1 for the TX and RX channel bandwidths defined in Table
 =cut
 
 sub fs {
-  my $self = shift;
-  my $band = $self->band or die("Error: band required");
-  my $fs   = $FS_TABLE{$band} or die("Error: frequency separation not found in %FS_TABLE for band $band");
+  my $self =  shift;
+  my $band =  $self->band or die('Error: band required');
+  my $fs   =  $self->band_note2 ? dualvar(0, 'n/a')
+           :  $FS_TABLE{$band}
+           or die(qq{Error: frequency separation not found in %FS_TABLE for band "$band"});
   return $fs
 }
 
 =head1 SEE ALSO
 
 L<https://www.etsi.org/deliver/etsi_ts/136100_136199/136101/17.06.00_60/ts_136101v170600p.pdf>
+L<https://github.com/qvil/lte-earfcn-calculator>
 
 =head1 AUTHOR
 

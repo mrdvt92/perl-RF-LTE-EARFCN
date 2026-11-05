@@ -4,8 +4,8 @@ use warnings;
 use Test::More tests => 22;
 BEGIN { use_ok('RF::LTE::EARFCN') };
 
-my $obj = RF::LTE::EARFCN->new;
-isa_ok($obj, 'RF::LTE::EARFCN');
+my $rf = RF::LTE::EARFCN->new;
+isa_ok($rf, 'RF::LTE::EARFCN');
 
 my $table = \@RF::LTE::EARFCN::BAND_TABLE;
 isa_ok($table, 'ARRAY');
