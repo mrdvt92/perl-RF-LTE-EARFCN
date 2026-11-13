@@ -2,7 +2,7 @@ package RF::LTE::EARFCN;
 use strict;
 use warnings;
 use base qw{Package::New};
-use Scalar::Util qw{dualvar};
+use Scalar::Util qw{dualvar}; #Should we use undef instead?
 use Carp qw{croak};
 
 our $VERSION = '0.02';
@@ -257,8 +257,13 @@ Issue: Does not support Narrow Band IoT options NB1 or NB2.
 sub ful {
   my $self         = shift;
   my $channel_type = $self->channel_type;
+  my $fs           = $self->fs;
+  my $band         = $self->band;
+  if ($channel_type eq 'ul' and (($band == 24 and $fs != -101.5) or ($band == 70 and $fs != 300))) {
+    die('Error: When channel type is uplink and the frequency separation is not the default value, the uplink frequency calculation is not supported'); #TODO
+  }
   return $self->band_note2      ? dualvar(0, 'n/a')
-       : $channel_type eq 'dl'  ? $self->fdl - $self->fs
+       : $channel_type eq 'dl'  ? $self->fdl - $fs
        : $channel_type eq 'ul'  ? $self->ful_low + 0.1 * ($self->channel - $self->noffs_ul)
        : die('Error: unexpected channel type');
 }
