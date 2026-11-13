@@ -1,17 +1,21 @@
 # NAME
 
-RF::LTE::EARFCN - LTE EARFCN Channel to Frequency Converter
+RF::LTE::EARFCN - LTE EARFCN Channel Converter to Band and Frequency
 
 # SYNOPSIS
 
     use RF::LTE::EARFCN;
     my $rf = RF::LTE::EARFCN->new(channel=>5110);
-    printf "Channel: %s\n Frequency (dl): %s\n Frequency (ul): %s\n Frequency Separation: %s\n",
-           $rf->channel, $rf->fdl, $rf->ful, $rf->fs;
+    say for "Channel: "              . $rf->channel,
+            "Channel Type: "         . $rf->channel_type,
+            "Band: "                 . $rf->band,
+            "Frequency (dl): "       . $rf->fdl,
+            "Frequency (ul): "       . $rf->ful,
+            "Frequency Separation: " .  $rf->fs;
 
 # DESCRIPTION
 
-This LTE EARFCN Channel to Frequency Converter uses the functions and tables in sections 5.7.3 and 5.7.4 of ETSI TS 136 101 V17.6.0 (2022-08) to convert EARFCN Channel to Frequency Downlink (fdl), Frequency Uplink (ful), and Frequency Separation (fs).
+This LTE EARFCN Channel to Band and Frequency Converter uses the functions and tables in sections 5.7.3 of ETSI TS 136 101 V17.6.0 (2022-08) to convert EARFCN Channel to Band (band), Frequency Downlink (fdl), Frequency Uplink (ful), and Frequency Separation (fs).
 
 The carrier frequency in the uplink and downlink is designated by the E-UTRA Absolute Radio Frequency Channel
 Number (EARFCN) in the range 0 - 262143. The relation between EARFCN and the carrier frequency in MHz for the
@@ -24,11 +28,6 @@ The relation between EARFCN and the carrier frequency in MHz for the uplink is g
 where FUL\_low and NOffs\_UL are given in Table 5.7.3-1 and NUL is the uplink EARFCN.
 
     FUL = FUL_low + 0.1(NUL - NOffs_UL)
-
-The relationship between frequency uplink and frequency downlink can also be calculated using table 5.7.4.
-
-    FDL = FUL + FS
-    FUL = FDL - FS
 
 # METHODS
 
@@ -50,7 +49,13 @@ Returns either 'ul' or 'dl' based on whether the channel is an uplink or downlin
 
     my $channel_type = $rf->channel_type; #ISA String 'dl'||'ul'
 
-## band, fdl\_low, noffs\_dl, range\_ndl\_lower, range\_ndl\_upper, ful\_low, noffs\_ul, range\_nul\_lower, range\_nul\_upper, band\_note2
+## channel\_offset
+
+Returns channel offset used for calculating uplink or downlink EARFCN
+
+    my $channel_offset = $rf->channel_offset; #ISA Int
+
+## band, fdl\_low, noffs\_dl, range\_ndl\_lower, range\_ndl\_upper, ful\_low, noffs\_ul, range\_nul\_lower, range\_nul\_upper
 
 Returns the table values directly from the table based on the channel.
 
@@ -62,8 +67,7 @@ Calculates and returns the downlink carrier frequency in MHz.
 
     my $frequency_downlink_mhz = $rf->fdl;
 
-The relation between EARFCN and the carrier frequency in MHz for the downlink is given by the following equation, where FDL\_low and NOffs\_DL are given in Table 5.7.3-1 and NDL is the
-downlink EARFCN.
+The relation between EARFCN and the carrier frequency in MHz for the downlink is given by the following equation, where FDL\_low and NOffs\_DL are given in Table 5.7.3-1 and NDL is the downlink EARFCN.
 
     FDL = FDL_low + 0.1(NDL - NOffs_DL)
 
@@ -77,16 +81,15 @@ The relation between EARFCN and the carrier frequency in MHz for the uplink is g
 
     FUL = FUL_low + 0.1(NUL - NOffs_UL)
 
-Issue: Does not support Narrow Band IoT options NB1 or NB2.
+Returns undef for bands that are restricted to E-UTRA operation when carrier aggregation is configured.
 
 ## fs
 
-Returns the TX-RX frequency separation in MHz from Table 5.7.4-1 based on the band of the channel.
+Calculates the TX-RX frequency separation in MHz from Table 5.7.3-1 based on the difference between FDL\_low and FUL\_low.
 
     my $frequency_separation_mhz = $rf->fs;
 
-The default E-UTRA TX channel (carrier center frequency) to RX channel (carrier center frequency) separation is
-specified in Table 5.7.4-1 for the TX and RX channel bandwidths defined in Table 5.6.1-1
+Returns undef for bands that are restricted to E-UTRA operation when carrier aggregation is configured.
 
 # SEE ALSO
 
