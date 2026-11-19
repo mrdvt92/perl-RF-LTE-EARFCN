@@ -1,6 +1,6 @@
 Name:           perl-RF-LTE-EARFCN
 Version:        0.03
-Release:        1%{?dist}
+Release:        3%{?dist}
 Summary:        LTE EARFCN Channel Converter to Band and Frequency
 License:        MIT
 Group:          Development/Libraries
@@ -46,11 +46,15 @@ rm -rf $RPM_BUILD_ROOT
 
 %files
 %defattr(-,root,root,-)
-%doc Changes LICENSE META.json README.md
+%doc Changes META.json README.md
+%license LICENSE
 %{perl_vendorlib}/*
 %{_mandir}/man3/*
 
 %changelog
+* Thu Nov 19 2026 Michael R. Davis <mrdvt92@yahoo.com> 0.03-3
+- Corrected LICENSE file location
+
 * Fri Nov 13 2026 Michael R. Davis <mrdvt92@yahoo.com> 0.03-1
 - Update
 
